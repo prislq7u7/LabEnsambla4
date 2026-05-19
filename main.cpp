@@ -4,11 +4,53 @@
 #include <stdexcept>
 #include <cctype>
 
+//declaraciones de las funciones .asm
+extern "C" {
+    void proc(
+        const unsigned char* input,
+        unsigned char* output,
+        size_t pixel_count,
+        unsigned char brightness,
+        unsigned char threshold
+    );
+}
+
+//declaracion de la función de procesamiento en C++
+void process_image_cpp(
+    const unsigned char* input,
+    unsigned char* output,
+    size_t pixel_count,
+    unsigned char brightness,
+    unsigned char threshold
+);
+
 struct Image {
     int width;
     int height;
     unsigned char* pixels;
 };
+
+//implementación de la función de procesamiento en C++
+void process_image_cpp(
+    const unsigned char* input,
+    unsigned char* output,
+    size_t pixel_count,
+    unsigned char brightness,
+    unsigned char threshold
+) {
+    for (size_t i = 0; i < pixel_count; i++) {
+        //aumentar brillo con saturación
+        int valor = input[i] + brightness;
+        if (valor > 255) valor = 255;
+        
+        //umbralización
+        if (valor > threshold) {
+            output[i] = 255;
+        } else {
+            output[i] = 0;
+        }
+    }
+}
 
 std::string read_token(std::istream& input) {
     std::string token;
@@ -144,9 +186,11 @@ int main(int argc, char* argv[]) {
         unsigned char* output_simd = new unsigned char[size];
 
         
-        //invocar función de c++ que procesa la imagen
-        
-        //invocar función de ensamblador que procesa la imagen
+    // Invocar función de C++ que procesa la imagen
+        process_image_cpp(input_image.pixels, output_cpp, size, brightness, threshold);
+
+    // Invocar función de ensamblador que procesa la imagen
+        proc(input_image.pixels, output_simd, size, brightness, threshold);
 
         std::string output_cpp_filename = output_prefix + "_cpp.pgm";
         std::string output_simd_filename = output_prefix + "_simd.pgm";
