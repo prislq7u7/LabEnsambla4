@@ -15,23 +15,13 @@ extern "C" {
     );
 }
 
-//declaracion de la función de procesamiento en C++
-void process_image_cpp(
-    const unsigned char* input,
-    unsigned char* output,
-    size_t pixel_count,
-    unsigned char brightness,
-    unsigned char threshold
-);
-
 struct Image {
     int width;
     int height;
     unsigned char* pixels;
 };
 
-//implementación de la función de procesamiento en C++
-void process_image_cpp(
+void procesar_imag(
     const unsigned char* input,
     unsigned char* output,
     size_t pixel_count,
@@ -187,7 +177,7 @@ int main(int argc, char* argv[]) {
 
         
     // Invocar función de C++ que procesa la imagen
-        process_image_cpp(input_image.pixels, output_cpp, size, brightness, threshold);
+        procesar_imag(input_image.pixels, output_cpp, size, brightness, threshold);
 
     // Invocar función de ensamblador que procesa la imagen
         proc(input_image.pixels, output_simd, size, brightness, threshold);

@@ -3,102 +3,107 @@ section .data
 section .text
 global proc
 
+;procesa un bloque de 32 pixeles
 %macro procesar_bloque 4
-    ;suma brillo con saturación
-    vpaddusb %1, %1, %2 ; %1 = píxeles + brillo 
-    
-    ;compara con umbral
-    vpcmpgtb %1, %1, %3 ;%1 = 0xFF si > umbral, 0 si no
-    
+    ;suma brillo con saturacion
+    vpaddusb %1, %1, %2 ; 
+    vpmaxub %1, %1, %3 ;%1 = max(pixel, umbral)
+    vpcmpeqb %1, %1, %3 ;pixel == umbral
+    vpandn %1, %1, [rel masc] ;invierte pixel > umbral
+
     ;guarda resultado en salida
     vmovdqu [%4], %1
 %endmacro
 
-%macro cargar_parametros_simd 4
-    ;carga brillo 
-    movd xmm0, %3 ;xmm0 = [0,0,0,brightness]
-    vpbroadcastb %1, xmm0 ;%1 = 32 veces brightness
-    
-    ;carga umbral
-    movd xmm0, %4 ;xmm0 = [0,0,0,threshold]
-    vpbroadcastb %2, xmm0 ;%2 = 32 veces threshold
+;carga brightness y threshold 
+%macro load_parametros 4
+    ;loads brillo
+    vmovd xmm0, %3 
+    vpbroadcastb %1, xmm0 
+
+    ;loads umbral
+    vmovd xmm0, %4 
+    vpbroadcastb %2, xmm0 
 %endmacro
+
+section .data
+    masc: times 32 db 0xFF
+
+section .text
 
 proc:
     ;prólogo
     push rbp
     mov rbp, rsp
     push rbx
-    
-    ;usa vzeroupper para evitar mezclar AVX con SSE
+    push r12
+    push r13
+    push r14
+
+    ;guarda parámetros
+    mov rbx, rdi ;input
+    mov r12, rsi ;output
+    mov r13, rdx ;pixel_count
+    movzx r14d, cl;brightness sin signo
+    movzx r9d, r8b ;threshold sin signo
+
     vzeroupper
-    
-    ;guarda parámetros 
-    mov rbx, rdi ;rbx = input
-    mov rcx, rsi ;rcx = output
-    mov rdx, rdx ;rdx = pixel_count
-    movzx rsi, cl ;rsi = brightness (extendido a 64 bits)
-    movzx r8, r8b ;r8 = threshold (extendido a 64 bits)
-    
-    ;carga parámetros SIMD usando macro
-    cargar_parametros_simd ymm1, ymm2, esi, r8d ;ymm1 = brightness, ymm2 = threshold
-    
-    ;procesa bloques de 32 píxeles
-    mov rax, 0 contador de bloques procesados
-    
+    load_parametros ymm1, ymm2, r14d, r9d 
+
 .procesar_bloque:
-    ;verifica si quedan al menos 32 píxeles
-    cmp rdx, 32
+    ;verifica si quedan al menos 32 pixel es
+    cmp r13, 32
     jb .procesar_resto
-    
-    ;carga 32 píxeles
-    vmovdqu ymm0, [rbx] ;ymm0 = 32 bytes de la imagen
-    
-    ;procesa loque usando macro
-    procesar_bloque ymm0, ymm1, ymm2, rcx
-    
+
+    ;carga 32 pixel es de la imagen de entrada
+    vmovdqu ymm0, [rbx]
+
+    ;procesa el bloque usando macro
+    procesar_bloque ymm0, ymm1, ymm2, r12
+
     ;avanza punteros
     add rbx, 32
-    add rcx, 32
-    sub rdx, 32
+    add r12, 32
+    sub r13, 32
     jmp .procesar_bloque
-    
+
 .procesar_resto:
-    ;procesa píxeles restantes sin SIMD
-    cmp rdx, 0
+    ;procesa pixeles restantes uno por uno 
+    cmp r13, 0
     je .fin
-    
+
 .procesar_byte:
-    ;carga un píxel
+    ;carga un pixel 
     movzx rax, byte [rbx]
-    
+
     ;suma brillo con saturación
-    add al, sil
-    cmp al, 255
-    jbe .no_saturar
+    add al, r14b ;brightness
+    jnc .no_saturar ;si no hubo carry, no satura
     mov al, 255
 .no_saturar:
-    
-    ;umbralización
-    cmp al, r8b
-    jle .menor_igual
-    mov al, 255
-    jmp .guardar
-.menor_igual:
+
+    ;comparación sin signo con ja
+    cmp al, r9b ;compara pixel con umbral
+    ja .mayor ;pixel > umbral
     mov al, 0
+    jmp .guardar
+.mayor:
+    mov al, 255
+
 .guardar:
-    
-    ;guarda resultado
-    mov [rcx], al
-    
-    ;avanza
+    mov [r12], al
+
+    ;avanza punteros
     inc rbx
-    inc rcx
-    dec rdx
+    inc r12
+    dec r13
     jnz .procesar_byte
-    
+
 .fin:
     vzeroupper
-    pop rbx 
+    pop r14
+    pop r13
+    pop r12
+    pop rbx
     pop rbp
     ret
