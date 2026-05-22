@@ -1,3 +1,5 @@
+;para compilar: nasm -f elf64 proc.asm -o proc.o   ----->>> ./main columns.pgm -nombre_archivo_salida- -valor- -valor-
+
 section .data
 
 section .text
